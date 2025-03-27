@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,12 @@ import { useToast } from "@/components/ui/use-toast";
 import FileUploader from "@/components/FileUploader";
 import TerminologyExtractor from "@/components/TerminologyExtractor";
 
+interface GeminiModel {
+  name: string;
+  displayName: string;
+  description?: string;
+}
+
 const Index = () => {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
@@ -21,15 +27,67 @@ const Index = () => {
   const [progress, setProgress] = useState(0);
   const [extractedTerms, setExtractedTerms] = useState<null | Array<{sourceTerm: string, targetTerm: string}>>(null);
   const [isApiKeyValid, setIsApiKeyValid] = useState(false);
+  const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  const fetchAvailableModels = async (key: string) => {
+    setIsLoadingModels(true);
+    try {
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models?key=" + key
+      );
+      
+      if (!response.ok) {
+        throw new Error("Invalid API key or network error");
+      }
+      
+      const data = await response.json();
+      
+      // Filter to include only Gemini models
+      const geminiModels = data.models
+        .filter((model: any) => model.name.includes("gemini"))
+        .map((model: any) => ({
+          name: model.name,
+          displayName: model.displayName || formatModelName(model.name),
+          description: model.description
+        }));
+      
+      setAvailableModels(geminiModels);
+      setIsApiKeyValid(true);
+      
+      toast({
+        title: "API Key Valid",
+        description: `Found ${geminiModels.length} available Gemini models.`,
+      });
+      
+    } catch (error: any) {
+      setIsApiKeyValid(false);
+      toast({
+        title: "API Key Invalid",
+        description: error.message || "Could not fetch available models",
+        variant: "destructive",
+      });
+      setAvailableModels([]);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  // Format model name for display if no displayName is provided
+  const formatModelName = (name: string): string => {
+    const baseName = name.split('/').pop() || name;
+    return baseName
+      .replace('gemini-', 'Gemini ')
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   const validateApiKey = (key: string) => {
-    // Simple validation - check if key is not empty and has at least 30 characters
+    // Only proceed if key has reasonable length
     if (key && key.length >= 30) {
-      setIsApiKeyValid(true);
-      toast({
-        title: "API Key Validated",
-        description: "Your API key format is valid. You can now select a model.",
-      });
+      fetchAvailableModels(key);
     } else {
       setIsApiKeyValid(false);
       if (key) {
@@ -39,6 +97,7 @@ const Index = () => {
           variant: "destructive",
         });
       }
+      setAvailableModels([]);
     }
   };
 
@@ -47,6 +106,7 @@ const Index = () => {
     setApiKey(key);
     if (key === "") {
       setIsApiKeyValid(false);
+      setAvailableModels([]);
     }
   };
 
@@ -98,40 +158,34 @@ const Index = () => {
     setIsProcessing(true);
     setProgress(0);
     
-    // Simulate the extraction process
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 300);
+    // Use the TerminologyExtractor component for the actual extraction
+    // We'll set up the onProgress, onComplete, and onError handlers to update UI
+  };
 
-    // Use the TerminologyExtractor component to handle the actual extraction
-    // For now, we'll simulate the process and generate mock data
-    setTimeout(() => {
-      clearInterval(interval);
-      setProgress(100);
-      
-      // Mock extracted terminology
-      const mockTerms = [
-        { sourceTerm: "cloud computing", targetTerm: "computación en la nube" },
-        { sourceTerm: "artificial intelligence", targetTerm: "inteligencia artificial" },
-        { sourceTerm: "machine learning", targetTerm: "aprendizaje automático" },
-        { sourceTerm: "database", targetTerm: "base de datos" },
-        { sourceTerm: "neural network", targetTerm: "red neuronal" }
-      ];
-      
-      setExtractedTerms(mockTerms);
-      setIsProcessing(false);
-      
-      toast({
-        title: "Extraction Complete",
-        description: "Terminology extraction has been completed successfully.",
-      });
-    }, 5000);
+  const handleExtractionComplete = (terms: Array<{sourceTerm: string, targetTerm: string}>) => {
+    setExtractedTerms(terms);
+    setIsProcessing(false);
+    setProgress(100);
+    
+    toast({
+      title: "Extraction Complete",
+      description: `Successfully extracted ${terms.length} terminology pairs.`,
+    });
+  };
+
+  const handleExtractionProgress = (progressValue: number) => {
+    setProgress(progressValue);
+  };
+
+  const handleExtractionError = (errorMessage: string) => {
+    setIsProcessing(false);
+    setProgress(0);
+    
+    toast({
+      title: "Extraction Failed",
+      description: errorMessage,
+      variant: "destructive",
+    });
   };
 
   const downloadTerms = () => {
@@ -187,21 +241,23 @@ const Index = () => {
                 <div className="grid gap-2">
                   <Label htmlFor="model">Gemini Model</Label>
                   <Select 
-                    disabled={!isApiKeyValid} 
+                    disabled={!isApiKeyValid || isLoadingModels} 
                     value={selectedModel} 
                     onValueChange={setSelectedModel}
                   >
                     <SelectTrigger id="model">
-                      <SelectValue placeholder="Select Gemini model" />
+                      <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select Gemini model"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
-                      <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                      <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                      {availableModels.map(model => (
+                        <SelectItem key={model.name} value={model.name}>
+                          {model.displayName}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   {!isApiKeyValid && (
-                    <p className="text-xs text-slate-500">Enter a valid API key to select a model</p>
+                    <p className="text-xs text-slate-500">Enter a valid API key to see available models</p>
                   )}
                 </div>
               </div>
@@ -267,6 +323,19 @@ const Index = () => {
                   </p>
                 </div>
               )}
+              
+              {/* Invisible component that handles the extraction logic */}
+              {isProcessing && (
+                <TerminologyExtractor
+                  apiKey={apiKey}
+                  modelName={selectedModel}
+                  datasetInfo={datasetInfo}
+                  tmxFile={tmxFile}
+                  onProgress={handleExtractionProgress}
+                  onComplete={handleExtractionComplete}
+                  onError={handleExtractionError}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -293,7 +362,7 @@ const Index = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {extractedTerms.slice(0, 5).map((term, index) => (
+                      {extractedTerms.map((term, index) => (
                         <tr key={index}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {term.sourceTerm}

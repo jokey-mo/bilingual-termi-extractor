@@ -6,9 +6,10 @@ import { Upload } from 'lucide-react';
 
 interface FileUploaderProps {
   onFileUpload: (file: File) => void;
+  accept?: string;
 }
 
-const FileUploader = ({ onFileUpload }: FileUploaderProps) => {
+const FileUploader = ({ onFileUpload, accept = ".tmx" }: FileUploaderProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -21,8 +22,14 @@ const FileUploader = ({ onFileUpload }: FileUploaderProps) => {
   
   const validateAndUpload = (file: File) => {
     // Check file extension (simple validation)
-    if (!file.name.toLowerCase().endsWith('.tmx')) {
-      alert('Please upload a valid TMX file.');
+    const acceptedFormats = accept.split(',').map(format => 
+      format.trim().toLowerCase().replace('*', '')
+    );
+    
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    
+    if (!acceptedFormats.includes(fileExt)) {
+      alert(`Please upload a valid file (${accept}).`);
       return;
     }
     
@@ -62,7 +69,7 @@ const FileUploader = ({ onFileUpload }: FileUploaderProps) => {
     >
       <input
         type="file"
-        accept=".tmx"
+        accept={accept}
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
@@ -74,7 +81,7 @@ const FileUploader = ({ onFileUpload }: FileUploaderProps) => {
           <span className="font-medium">Click to upload</span> or drag and drop
         </div>
         <p className="text-xs text-gray-500">
-          TMX files only (.tmx)
+          TMX files only ({accept})
         </p>
         <Button 
           variant="outline" 

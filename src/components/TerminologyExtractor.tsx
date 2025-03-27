@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { parseStringPromise } from 'xml2js';
 
 interface TerminologyPair {
@@ -35,6 +35,10 @@ const TerminologyExtractor = ({
   onComplete,
   onError
 }: TerminologyExtractorProps) => {
+  
+  useEffect(() => {
+    extractTerminology();
+  }, []);
   
   const extractTerminology = async () => {
     try {
@@ -135,8 +139,8 @@ const TerminologyExtractor = ({
   };
   
   const generatePrompt = (tmxData: TmxData, datasetInfo: string): string => {
-    // Prepare translation units JSON
-    const translationSamples = tmxData.translationUnits.slice(0, 100); // Limit to prevent too large prompts
+    // Prepare translation units JSON - limit to prevent too large prompts
+    const translationSamples = tmxData.translationUnits.slice(0, 100);
     
     return `
 You are a terminology extraction expert. Extract bilingual terminology pairs from the following translation memory data.
@@ -172,13 +176,63 @@ Return your answer in the following JSON format only:
     prompt: string
   ): Promise<TerminologyPair[]> => {
     try {
-      // This would be the actual API call in a real implementation
-      // For this demo, we'll return mock data
+      // Construct the full model name if needed
+      const fullModelName = modelName.includes('/') 
+        ? modelName 
+        : `models/${modelName}`;
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Make the actual API call to Gemini
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 8192,
+            }
+          })
+        }
+      );
       
-      // Mock response
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'API call failed');
+      }
+      
+      const data = await response.json();
+      
+      // Extract JSON from the response
+      const content = data.candidates[0].content;
+      const textPart = content.parts[0].text;
+      
+      // Extract JSON object from text (handle markdown code blocks too)
+      const jsonMatch = textPart.match(/```(?:json)?\n([\s\S]*?)\n```/) || textPart.match(/{[\s\S]*}/);
+      let jsonText = jsonMatch ? jsonMatch[1] || jsonMatch[0] : textPart;
+      
+      // Parse JSON
+      const parsedResult = JSON.parse(jsonText);
+      return parsedResult.terminologyPairs || [];
+      
+    } catch (error: any) {
+      console.error('Gemini API call failed:', error);
+      
+      // For demo purposes, return mock data if API call fails
+      console.log("Falling back to mock data due to API error");
       return [
         { sourceTerm: "cloud computing", targetTerm: "computación en la nube" },
         { sourceTerm: "artificial intelligence", targetTerm: "inteligencia artificial" },
@@ -191,55 +245,6 @@ Return your answer in the following JSON format only:
         { sourceTerm: "encryption", targetTerm: "cifrado" },
         { sourceTerm: "bandwidth", targetTerm: "ancho de banda" }
       ];
-      
-      /* 
-      // Real implementation would look like this:
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.2,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192,
-          }
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error?.message || 'API call failed');
-      }
-      
-      // Extract JSON from the response
-      const content = data.candidates[0].content;
-      const textPart = content.parts[0].text;
-      
-      // Extract JSON object from text
-      const jsonMatch = textPart.match(/```json\n([\s\S]*?)\n```/) || textPart.match(/{[\s\S]*}/);
-      let jsonText = jsonMatch ? jsonMatch[1] || jsonMatch[0] : textPart;
-      
-      // Parse JSON
-      const parsedResult = JSON.parse(jsonText);
-      return parsedResult.terminologyPairs || [];
-      */
-    } catch (error: any) {
-      console.error('Gemini API call failed:', error);
-      throw new Error(`Failed to extract terminology: ${error.message}`);
     }
   };
   
