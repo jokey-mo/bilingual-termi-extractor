@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import FileUploader from "@/components/FileUploader";
 import TerminologyExtractor from "@/components/TerminologyExtractor";
+import Logo from "@/components/Logo";
 
 interface GeminiModel {
   name: string;
@@ -29,6 +29,7 @@ const Index = () => {
   const [isApiKeyValid, setIsApiKeyValid] = useState(false);
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string>("");
 
   const fetchAvailableModels = async (key: string) => {
     setIsLoadingModels(true);
@@ -208,9 +209,61 @@ const Index = () => {
     document.body.removeChild(link);
   };
 
+  // Handle logo file upload
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setLogoUrl(result);
+        localStorage.setItem('termex-logo', result);
+        toast({
+          title: "Logo Updated",
+          description: "Your logo has been updated successfully.",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Load saved logo from localStorage on component mount
+  useEffect(() => {
+    const savedLogo = localStorage.getItem('termex-logo');
+    if (savedLogo) {
+      setLogoUrl(savedLogo);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="container mx-auto px-4">
+        <div className="flex justify-between items-center mb-8">
+          <div className="text-center flex-1">
+            <Logo src={logoUrl} />
+          </div>
+          <div className="w-36">
+            <label htmlFor="logo-upload" className="cursor-pointer">
+              <Input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoUpload}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                type="button"
+                onClick={() => document.getElementById('logo-upload')?.click()}
+              >
+                {logoUrl ? "Change Logo" : "Add Logo"}
+              </Button>
+            </label>
+          </div>
+        </div>
+        
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Bilingual Terminology Extractor</h1>
           <p className="text-slate-600 mt-2">Extract terminology pairs from TMX files using Google's Gemini API</p>
