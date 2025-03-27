@@ -81,7 +81,7 @@ const FileUploader = ({ onFileUpload, accept = ".tmx" }: FileUploaderProps) => {
           <span className="font-medium">Click to upload</span> or drag and drop
         </div>
         <p className="text-xs text-gray-500">
-          TMX files only ({accept})
+          TMX files only ({accept}) in UTF-8 encoding
         </p>
         <Button 
           variant="outline" 

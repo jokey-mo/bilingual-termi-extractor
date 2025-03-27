@@ -1,7 +1,8 @@
 
 import { useState, useEffect } from 'react';
-import { parseStringPromise } from 'xml2js';
 
+// Note: We'll use a different approach for parsing XML in the browser
+// instead of xml2js which has node.js dependencies
 interface TerminologyPair {
   sourceTerm: string;
   targetTerm: string;
@@ -60,48 +61,55 @@ const TerminologyExtractor = ({
       onProgress(100);
       
     } catch (error: any) {
+      console.error("Error parsing TMX file:", error);
       onError(error.message || 'Failed to extract terminology');
     }
   };
   
   const parseTmxFile = async (file: File): Promise<TmxData> => {
     try {
-      // Read the file content
+      // Read the file content as UTF-8 text
       const fileContent = await readFileAsText(file);
       
-      // Parse XML string
-      const parsedXml = await parseStringPromise(fileContent, { 
-        explicitArray: false,
-        mergeAttrs: true
-      });
+      // Create a DOM parser and parse the TMX content
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(fileContent, "text/xml");
       
-      // Extract source and target languages
-      const header = parsedXml.tmx.header;
-      const sourceLanguage = header.srcLang || '';
+      // Check for parsing errors
+      const parserError = xmlDoc.querySelector("parsererror");
+      if (parserError) {
+        throw new Error("Invalid XML format in TMX file");
+      }
+      
+      // Extract source language from header
+      const header = xmlDoc.querySelector("header");
+      const sourceLanguage = header?.getAttribute("srclang") || "";
+      
+      if (!sourceLanguage) {
+        throw new Error("Source language not found in TMX header");
+      }
       
       // Extract translation units
-      const body = parsedXml.tmx.body;
-      const tuNodes = Array.isArray(body.tu) ? body.tu : [body.tu];
-      
-      // Process translation units
+      const tuElements = xmlDoc.querySelectorAll("tu");
       const translationUnits: { source: string; target: string }[] = [];
-      let targetLanguage = '';
+      let targetLanguage = "";
       
-      tuNodes.forEach((tu: any) => {
-        const tuvs = Array.isArray(tu.tuv) ? tu.tuv : [tu.tuv];
-        let sourceText = '';
-        let targetText = '';
+      tuElements.forEach((tu) => {
+        const tuvs = tu.querySelectorAll("tuv");
+        let sourceText = "";
+        let targetText = "";
         
-        tuvs.forEach((tuv: any) => {
-          const lang = tuv.xml_lang || tuv.lang;
-          const segText = typeof tuv.seg === 'string' ? tuv.seg : tuv.seg?._text || '';
+        tuvs.forEach((tuv) => {
+          const lang = tuv.getAttribute("xml:lang") || tuv.getAttribute("lang");
+          const segElement = tuv.querySelector("seg");
+          const segText = segElement ? segElement.textContent || "" : "";
           
           if (lang === sourceLanguage) {
             sourceText = segText;
           } else {
             // Assuming the first non-source language is the target language
             if (!targetLanguage) {
-              targetLanguage = lang;
+              targetLanguage = lang || "";
             }
             
             if (lang === targetLanguage) {
@@ -118,6 +126,14 @@ const TerminologyExtractor = ({
         }
       });
       
+      if (!targetLanguage) {
+        throw new Error("Target language not found in TMX file");
+      }
+      
+      if (translationUnits.length === 0) {
+        throw new Error("No valid translation units found in TMX file");
+      }
+      
       return {
         sourceLanguage,
         targetLanguage,
@@ -125,7 +141,7 @@ const TerminologyExtractor = ({
       };
     } catch (error) {
       console.error('Error parsing TMX file:', error);
-      throw new Error('Failed to parse TMX file. Please ensure it is a valid TMX format.');
+      throw new Error('Failed to parse TMX file. Please ensure it is a valid TMX format in UTF-8 encoding.');
     }
   };
   
@@ -133,8 +149,8 @@ const TerminologyExtractor = ({
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => resolve(event.target?.result as string);
-      reader.onerror = (error) => reject(error);
-      reader.readAsText(file);
+      reader.onerror = (error) => reject(new Error("Failed to read file. Please ensure it's a valid UTF-8 encoded TMX file."));
+      reader.readAsText(file, 'UTF-8'); // Explicitly specify UTF-8 encoding
     });
   };
   
