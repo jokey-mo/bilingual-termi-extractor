@@ -27,7 +27,6 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
   if (!logoExists) {
     return (
       <div className={cn("flex items-center gap-2", className)}>
-        <Image className="h-8 w-8 text-slate-800" />
         <span className="font-bold text-xl text-slate-800">TermEx</span>
       </div>
     );

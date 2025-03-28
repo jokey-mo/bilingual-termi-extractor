@@ -1,17 +1,14 @@
+
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
-import FileUploader from "@/components/FileUploader";
-import TerminologyExtractor from "@/components/TerminologyExtractor";
-import Logo from "@/components/Logo";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import Header from "@/components/Header";
+import ApiKeyCard from "@/components/ApiKeyCard";
+import DatasetInfoCard from "@/components/DatasetInfoCard";
+import FileUploadCard from "@/components/FileUploadCard";
+import ExtractCard from "@/components/ExtractCard";
+import ResultsCard from "@/components/ResultsCard";
+import ApiStatusAlerts from "@/components/ApiStatusAlerts";
+import DebugPanel from "@/components/DebugPanel";
 
 interface GeminiModel {
   name: string;
@@ -145,16 +142,6 @@ const Index = () => {
     }
   };
 
-  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const key = e.target.value;
-    setApiKey(key);
-    if (key === "") {
-      setIsApiKeyValid(false);
-      setAvailableModels([]);
-      setApiError(null);
-    }
-  };
-
   const handleFileUpload = (file: File) => {
     setTmxFile(file);
     toast({
@@ -261,210 +248,60 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="container mx-auto px-4">
-        <div className="flex justify-center items-center mb-8">
-          <div className="text-center">
-            <Logo />
-          </div>
-        </div>
+        <Header />
         
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Bilingual Terminology Extractor</h1>
           <p className="text-slate-600 mt-2">Extract terminology pairs from TMX files using Google's Gemini API</p>
         </div>
         
-        {/* API Error Alert */}
-        {apiError && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>API Error</AlertTitle>
-            <AlertDescription>{apiError}</AlertDescription>
-          </Alert>
-        )}
-        
-        {/* API Success Alert */}
-        {isApiKeyValid && !apiError && (
-          <Alert className="mb-6 bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">API Connected</AlertTitle>
-            <AlertDescription className="text-green-700">Successfully connected to Gemini API with {availableModels.length} models available.</AlertDescription>
-          </Alert>
-        )}
+        <ApiStatusAlerts 
+          apiError={apiError} 
+          isApiKeyValid={isApiKeyValid} 
+          availableModels={availableModels}
+        />
         
         <div className="grid grid-cols-1 gap-6 max-w-4xl mx-auto">
-          {/* API Key Input */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 1: API Key Configuration</CardTitle>
-              <CardDescription>Enter your Google Gemini API key to get started</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="apiKey">Gemini API Key</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      id="apiKey" 
-                      type="password" 
-                      placeholder="Enter your API key" 
-                      value={apiKey}
-                      onChange={handleApiKeyChange}
-                      className="flex-1"
-                    />
-                    <Button 
-                      onClick={() => apiKey && validateApiKey(apiKey)}
-                      disabled={!apiKey || apiKey.length < 30}
-                    >
-                      Validate
-                    </Button>
-                  </div>
-                  <p className="text-xs text-slate-500">Your API key will not be stored permanently</p>
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="model">Gemini Model</Label>
-                  <Select 
-                    disabled={!isApiKeyValid || isLoadingModels} 
-                    value={selectedModel} 
-                    onValueChange={setSelectedModel}
-                  >
-                    <SelectTrigger id="model">
-                      <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select Gemini model"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableModels.map(model => (
-                        <SelectItem key={model.name} value={model.name}>
-                          {model.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!isApiKeyValid && (
-                    <p className="text-xs text-slate-500">Enter a valid API key to see available models</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ApiKeyCard 
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            isApiKeyValid={isApiKeyValid}
+            isLoadingModels={isLoadingModels}
+            availableModels={availableModels}
+            validateApiKey={validateApiKey}
+          />
 
-          {/* Dataset Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 2: Dataset Information</CardTitle>
-              <CardDescription>Provide details about your dataset to improve terminology extraction</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-2">
-                <Label htmlFor="datasetInfo">Dataset Information</Label>
-                <Textarea 
-                  id="datasetInfo" 
-                  placeholder="Enter information about domain/industry, company, and any additional relevant details" 
-                  className="resize-y min-h-[100px]"
-                  value={datasetInfo}
-                  onChange={(e) => setDatasetInfo(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <DatasetInfoCard 
+            datasetInfo={datasetInfo}
+            setDatasetInfo={setDatasetInfo}
+          />
 
-          {/* TMX File Upload */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 3: Upload TMX File</CardTitle>
-              <CardDescription>Upload your TMX translation memory file</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FileUploader onFileUpload={handleFileUpload} />
-              {tmxFile && (
-                <p className="text-sm text-green-600 mt-2">
-                  Uploaded: {tmxFile.name} ({Math.round(tmxFile.size / 1024)} KB)
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <FileUploadCard 
+            tmxFile={tmxFile}
+            onFileUpload={handleFileUpload}
+          />
 
-          {/* Extract Terminology Button */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 4: Extract Terminology</CardTitle>
-              <CardDescription>Process the TMX file to extract terminology pairs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                className="w-full" 
-                onClick={handleExtractTerminology}
-                disabled={isProcessing || !apiKey || !isApiKeyValid || !selectedModel || !datasetInfo || !tmxFile}
-              >
-                {isProcessing ? "Processing..." : "Extract Terminology"}
-              </Button>
-              
-              {isProcessing && (
-                <div className="mt-4 space-y-2">
-                  <Progress value={progress} className="h-2" />
-                  <p className="text-sm text-center text-slate-600">
-                    Processing... {progress}%
-                  </p>
-                </div>
-              )}
-              
-              {/* Invisible component that handles the extraction logic */}
-              {isProcessing && (
-                <TerminologyExtractor
-                  apiKey={apiKey}
-                  modelName={selectedModel}
-                  datasetInfo={datasetInfo}
-                  tmxFile={tmxFile}
-                  onProgress={handleExtractionProgress}
-                  onComplete={handleExtractionComplete}
-                  onError={handleExtractionError}
-                />
-              )}
-            </CardContent>
-          </Card>
+          <ExtractCard 
+            isProcessing={isProcessing}
+            progress={progress}
+            apiKey={apiKey}
+            selectedModel={selectedModel}
+            datasetInfo={datasetInfo}
+            tmxFile={tmxFile}
+            onExtractTerminology={handleExtractTerminology}
+            onProgress={handleExtractionProgress}
+            onComplete={handleExtractionComplete}
+            onError={handleExtractionError}
+          />
 
-          {/* Results */}
-          {extractedTerms && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Extracted Terminology</CardTitle>
-                <CardDescription>
-                  {extractedTerms.length} terminology pairs extracted
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="border rounded-md overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Source Term
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Target Term
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {extractedTerms.map((term, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {term.sourceTerm}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {term.targetTerm}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={downloadTerms}>
-                  Download as CSV
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
+          <ResultsCard 
+            extractedTerms={extractedTerms}
+            onDownload={downloadTerms}
+          />
+          
+          <DebugPanel debugMessages={debugMessages} />
         </div>
       </div>
     </div>
