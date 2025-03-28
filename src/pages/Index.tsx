@@ -10,6 +10,8 @@ import { useToast } from "@/components/ui/use-toast";
 import FileUploader from "@/components/FileUploader";
 import TerminologyExtractor from "@/components/TerminologyExtractor";
 import Logo from "@/components/Logo";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface GeminiModel {
   name: string;
@@ -30,19 +32,57 @@ const Index = () => {
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>("");
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [debugMessages, setDebugMessages] = useState<string[]>([]);
+
+  // Override console.log to capture debug messages
+  useEffect(() => {
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    
+    console.log = (...args) => {
+      originalConsoleLog(...args);
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      setDebugMessages(prev => [...prev, `LOG: ${message}`]);
+    };
+    
+    console.error = (...args) => {
+      originalConsoleError(...args);
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      setDebugMessages(prev => [...prev, `ERROR: ${message}`]);
+    };
+    
+    return () => {
+      console.log = originalConsoleLog;
+      console.error = originalConsoleError;
+    };
+  }, []);
 
   const fetchAvailableModels = async (key: string) => {
     setIsLoadingModels(true);
+    setApiError(null);
+    
     try {
+      console.log("Fetching available models...");
       const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models?key=" + key
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
       );
       
+      // Log the response status for debugging
+      console.log(`API Response status: ${response.status}`);
+      
       if (!response.ok) {
-        throw new Error("Invalid API key or network error");
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log(`Found ${data.models?.length || 0} models in response`);
       
       // Filter to include only Gemini models
       const geminiModels = data.models
@@ -62,7 +102,10 @@ const Index = () => {
       });
       
     } catch (error: any) {
+      console.error("Error fetching models:", error);
       setIsApiKeyValid(false);
+      setApiError(error.message || "Failed to fetch available models");
+      
       toast({
         title: "API Key Invalid",
         description: error.message || "Could not fetch available models",
@@ -92,6 +135,7 @@ const Index = () => {
     } else {
       setIsApiKeyValid(false);
       if (key) {
+        setApiError("API key is too short. Gemini API keys are typically longer than 30 characters.");
         toast({
           title: "Invalid API Key",
           description: "The API key seems to be incomplete or invalid.",
@@ -108,6 +152,7 @@ const Index = () => {
     if (key === "") {
       setIsApiKeyValid(false);
       setAvailableModels([]);
+      setApiError(null);
     }
   };
 
@@ -156,11 +201,15 @@ const Index = () => {
       return;
     }
 
+    // Clear previous debug messages, errors, and results
+    setDebugMessages([]);
+    setApiError(null);
+    setExtractedTerms(null);
+    
     setIsProcessing(true);
     setProgress(0);
     
-    // Use the TerminologyExtractor component for the actual extraction
-    // We'll set up the onProgress, onComplete, and onError handlers to update UI
+    // The actual extraction will happen in the TerminologyExtractor component
   };
 
   const handleExtractionComplete = (terms: Array<{sourceTerm: string, targetTerm: string}>) => {
@@ -181,6 +230,7 @@ const Index = () => {
   const handleExtractionError = (errorMessage: string) => {
     setIsProcessing(false);
     setProgress(0);
+    setApiError(errorMessage);
     
     toast({
       title: "Extraction Failed",
@@ -209,6 +259,9 @@ const Index = () => {
     document.body.removeChild(link);
   };
 
+  // Toggle debug panel visibility
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
   // Handle logo file upload
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -242,25 +295,34 @@ const Index = () => {
           <div className="text-center flex-1">
             <Logo src={logoUrl} />
           </div>
-          <div className="w-36">
-            <label htmlFor="logo-upload" className="cursor-pointer">
-              <Input
-                id="logo-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleLogoUpload}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                type="button"
-                onClick={() => document.getElementById('logo-upload')?.click()}
-              >
-                {logoUrl ? "Change Logo" : "Add Logo"}
-              </Button>
-            </label>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+            >
+              {showDebugPanel ? "Hide Debug" : "Show Debug"}
+            </Button>
+            <div className="w-36">
+              <label htmlFor="logo-upload" className="cursor-pointer">
+                <Input
+                  id="logo-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  type="button"
+                  onClick={() => document.getElementById('logo-upload')?.click()}
+                >
+                  {logoUrl ? "Change Logo" : "Add Logo"}
+                </Button>
+              </label>
+            </div>
           </div>
         </div>
         
@@ -268,6 +330,47 @@ const Index = () => {
           <h1 className="text-3xl font-bold text-slate-800">Bilingual Terminology Extractor</h1>
           <p className="text-slate-600 mt-2">Extract terminology pairs from TMX files using Google's Gemini API</p>
         </div>
+        
+        {/* Debug Panel */}
+        {showDebugPanel && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Debug Information</CardTitle>
+              <CardDescription>Real-time debugging information and logs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-48 overflow-auto bg-slate-100 p-4 rounded-md text-xs font-mono">
+                {debugMessages.length === 0 ? (
+                  <p className="text-slate-500">No debug messages yet. Start the extraction process to see logs.</p>
+                ) : (
+                  debugMessages.map((msg, i) => (
+                    <div key={i} className={`mb-1 ${msg.startsWith('ERROR') ? 'text-red-600' : 'text-slate-700'}`}>
+                      {msg}
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* API Error Alert */}
+        {apiError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>API Error</AlertTitle>
+            <AlertDescription>{apiError}</AlertDescription>
+          </Alert>
+        )}
+        
+        {/* API Success Alert */}
+        {isApiKeyValid && !apiError && (
+          <Alert className="mb-6 bg-green-50 border-green-200">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">API Connected</AlertTitle>
+            <AlertDescription className="text-green-700">Successfully connected to Gemini API with {availableModels.length} models available.</AlertDescription>
+          </Alert>
+        )}
         
         <div className="grid grid-cols-1 gap-6 max-w-4xl mx-auto">
           {/* API Key Input */}
