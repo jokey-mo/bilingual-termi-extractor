@@ -63,7 +63,10 @@ const ApiKeyCard: React.FC<ApiKeyCardProps> = ({
                 Validate
               </Button>
             </div>
-            <p className="text-xs text-slate-500">Your API key will not be stored permanently</p>
+            <div className="text-xs text-slate-500">
+              <p>Your API key will not be stored permanently</p>
+              <p className="mt-1">Get your API key at: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">https://aistudio.google.com/apikey</a></p>
+            </div>
           </div>
           
           <div className="grid gap-2">

@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState } from 'react';
-import { Image } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LogoProps {
@@ -23,7 +22,7 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
       });
   }, []);
   
-  // If no logo exists, display a fallback icon
+  // If no logo exists, display the app name
   if (!logoExists) {
     return (
       <div className={cn("flex items-center gap-2", className)}>
