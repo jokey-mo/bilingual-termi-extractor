@@ -236,15 +236,22 @@ Return your answer in the following JSON format only:
       const model = genAI.getGenerativeModel({ model: modelName });
       
       console.log("Sending request to Gemini API...");
-      // Configure the response schema
+      // Configure the generation parameters
+      const generationConfig = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+      
+      // Create content with proper role structure
+      // This fixes the type error by providing the required 'role' property
       const result = await model.generateContent({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192,
-        }
+        contents: [{ 
+          role: 'user',
+          parts: [{ text: prompt }] 
+        }],
+        generationConfig
       });
       
       console.log("Received response from Gemini API");
