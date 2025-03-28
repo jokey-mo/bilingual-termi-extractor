@@ -31,7 +31,6 @@ const Index = () => {
   const [isApiKeyValid, setIsApiKeyValid] = useState(false);
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string>("");
   const [apiError, setApiError] = useState<string | null>(null);
   const [debugMessages, setDebugMessages] = useState<string[]>([]);
 
@@ -259,70 +258,12 @@ const Index = () => {
     document.body.removeChild(link);
   };
 
-  // Toggle debug panel visibility
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
-  
-  // Handle logo file upload
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setLogoUrl(result);
-        localStorage.setItem('termex-logo', result);
-        toast({
-          title: "Logo Updated",
-          description: "Your logo has been updated successfully.",
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Load saved logo from localStorage on component mount
-  useEffect(() => {
-    const savedLogo = localStorage.getItem('termex-logo');
-    if (savedLogo) {
-      setLogoUrl(savedLogo);
-    }
-  }, []);
-
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center mb-8">
-          <div className="text-center flex-1">
-            <Logo src={logoUrl} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDebugPanel(!showDebugPanel)}
-            >
-              {showDebugPanel ? "Hide Debug" : "Show Debug"}
-            </Button>
-            <div className="w-36">
-              <label htmlFor="logo-upload" className="cursor-pointer">
-                <Input
-                  id="logo-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleLogoUpload}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  type="button"
-                  onClick={() => document.getElementById('logo-upload')?.click()}
-                >
-                  {logoUrl ? "Change Logo" : "Add Logo"}
-                </Button>
-              </label>
-            </div>
+        <div className="flex justify-center items-center mb-8">
+          <div className="text-center">
+            <Logo />
           </div>
         </div>
         
@@ -330,29 +271,6 @@ const Index = () => {
           <h1 className="text-3xl font-bold text-slate-800">Bilingual Terminology Extractor</h1>
           <p className="text-slate-600 mt-2">Extract terminology pairs from TMX files using Google's Gemini API</p>
         </div>
-        
-        {/* Debug Panel */}
-        {showDebugPanel && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Debug Information</CardTitle>
-              <CardDescription>Real-time debugging information and logs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-48 overflow-auto bg-slate-100 p-4 rounded-md text-xs font-mono">
-                {debugMessages.length === 0 ? (
-                  <p className="text-slate-500">No debug messages yet. Start the extraction process to see logs.</p>
-                ) : (
-                  debugMessages.map((msg, i) => (
-                    <div key={i} className={`mb-1 ${msg.startsWith('ERROR') ? 'text-red-600' : 'text-slate-700'}`}>
-                      {msg}
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
         
         {/* API Error Alert */}
         {apiError && (
@@ -383,14 +301,22 @@ const Index = () => {
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="apiKey">Gemini API Key</Label>
-                  <Input 
-                    id="apiKey" 
-                    type="password" 
-                    placeholder="Enter your API key" 
-                    value={apiKey}
-                    onChange={handleApiKeyChange}
-                    onBlur={() => apiKey && validateApiKey(apiKey)}
-                  />
+                  <div className="flex gap-2">
+                    <Input 
+                      id="apiKey" 
+                      type="password" 
+                      placeholder="Enter your API key" 
+                      value={apiKey}
+                      onChange={handleApiKeyChange}
+                      className="flex-1"
+                    />
+                    <Button 
+                      onClick={() => apiKey && validateApiKey(apiKey)}
+                      disabled={!apiKey || apiKey.length < 30}
+                    >
+                      Validate
+                    </Button>
+                  </div>
                   <p className="text-xs text-slate-500">Your API key will not be stored permanently</p>
                 </div>
                 

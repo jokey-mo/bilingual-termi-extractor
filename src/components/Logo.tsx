@@ -1,21 +1,30 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LogoProps {
-  src?: string;
-  alt?: string;
   className?: string;
 }
 
-const Logo: React.FC<LogoProps> = ({ 
-  src, 
-  alt = "Bilingual Terminology Extractor",
-  className
-}) => {
-  // If no src is provided, display a fallback icon
-  if (!src) {
+const Logo: React.FC<LogoProps> = ({ className }) => {
+  const [logoExists, setLogoExists] = useState(false);
+  
+  useEffect(() => {
+    // Check if logo.png exists in the root folder
+    fetch('/logo.png')
+      .then(response => {
+        if (response.ok) {
+          setLogoExists(true);
+        }
+      })
+      .catch(() => {
+        setLogoExists(false);
+      });
+  }, []);
+  
+  // If no logo exists, display a fallback icon
+  if (!logoExists) {
     return (
       <div className={cn("flex items-center gap-2", className)}>
         <Image className="h-8 w-8 text-slate-800" />
@@ -27,8 +36,8 @@ const Logo: React.FC<LogoProps> = ({
   return (
     <div className={cn("flex items-center", className)}>
       <img 
-        src={src} 
-        alt={alt} 
+        src="/logo.png" 
+        alt="Bilingual Terminology Extractor" 
         className="h-8 max-w-[180px] object-contain" 
       />
     </div>
