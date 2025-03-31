@@ -23,6 +23,9 @@ const deduplicateTerms = (terms: Array<{sourceTerm: string, targetTerm: string}>
   const uniqueTerms = new Map<string, string>();
   
   terms.forEach(term => {
+    // Skip empty terms
+    if (!term.sourceTerm || !term.targetTerm) return;
+    
     // Only add if source term doesn't exist, or if it does but this target is longer/more complete
     const existingTerm = uniqueTerms.get(term.sourceTerm.toLowerCase());
     if (!existingTerm || (existingTerm.length < term.targetTerm.length)) {
@@ -30,14 +33,16 @@ const deduplicateTerms = (terms: Array<{sourceTerm: string, targetTerm: string}>
     }
   });
   
-  return Array.from(uniqueTerms.entries()).map(([sourceLower, target]) => {
-    // Find the original source term with proper casing
-    const originalTerm = terms.find(t => t.sourceTerm.toLowerCase() === sourceLower);
-    return {
-      sourceTerm: originalTerm?.sourceTerm || sourceLower,
-      targetTerm: target
-    };
-  });
+  return Array.from(uniqueTerms.entries())
+    .filter(([source, target]) => source && target) // Extra validation
+    .map(([sourceLower, target]) => {
+      // Find the original source term with proper casing
+      const originalTerm = terms.find(t => t.sourceTerm?.toLowerCase() === sourceLower);
+      return {
+        sourceTerm: originalTerm?.sourceTerm || sourceLower,
+        targetTerm: target
+      };
+    });
 };
 
 export const processTmxInChunks = async (options: ChunkProcessorOptions): Promise<Array<{sourceTerm: string, targetTerm: string}>> => {
@@ -54,6 +59,7 @@ export const processTmxInChunks = async (options: ChunkProcessorOptions): Promis
   const totalUnits = allTranslationUnits.length;
   let processedUnits = 0;
   let allTerms: Array<{sourceTerm: string, targetTerm: string}> = [];
+  let failedChunks = 0;
   
   console.log(`Processing ${totalUnits} translation units in chunks of ~${maxTokensPerChunk} tokens`);
   
@@ -84,7 +90,7 @@ export const processTmxInChunks = async (options: ChunkProcessorOptions): Promis
   
   console.log(`Split data into ${chunks.length} chunks`);
   
-  // Process each chunk
+  // Process each chunk with retry mechanism
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
     console.log(`Processing chunk ${i+1}/${chunks.length} with ${chunk.length} units`);
@@ -98,9 +104,42 @@ export const processTmxInChunks = async (options: ChunkProcessorOptions): Promis
     // Generate prompt for this chunk
     const prompt = generatePrompt(chunkTmxData, datasetInfo);
     
-    // Call API with the chunk
-    const chunkTerms = await callGeminiApi(apiKey, modelName, prompt);
-    console.log(`Chunk ${i+1} extracted ${chunkTerms.length} terms`);
+    let chunkTerms: Array<{sourceTerm: string, targetTerm: string}> = [];
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    // Retry logic for API calls
+    while (retryCount <= maxRetries) {
+      try {
+        // Call API with the chunk - now returns empty array on error instead of throwing
+        chunkTerms = await callGeminiApi(apiKey, modelName, prompt);
+        
+        if (chunkTerms.length > 0) {
+          console.log(`Chunk ${i+1} extracted ${chunkTerms.length} terms on attempt ${retryCount + 1}`);
+          break; // Success, exit retry loop
+        } else if (retryCount < maxRetries) {
+          console.warn(`Chunk ${i+1} returned no terms on attempt ${retryCount + 1}, retrying...`);
+          retryCount++;
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+        } else {
+          console.error(`Chunk ${i+1} failed to return terms after ${maxRetries + 1} attempts`);
+          failedChunks++;
+          break; // Max retries reached, continue to next chunk
+        }
+      } catch (error) {
+        if (retryCount < maxRetries) {
+          console.warn(`Error processing chunk ${i+1} on attempt ${retryCount + 1}, retrying:`, error);
+          retryCount++;
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+        } else {
+          console.error(`Failed to process chunk ${i+1} after ${maxRetries + 1} attempts:`, error);
+          failedChunks++;
+          break; // Max retries reached, continue to next chunk
+        }
+      }
+    }
     
     // Add these terms to our collection
     allTerms = [...allTerms, ...chunkTerms];
@@ -111,8 +150,26 @@ export const processTmxInChunks = async (options: ChunkProcessorOptions): Promis
     onChunkProgress(progress);
   }
   
+  // Log completion status
+  if (failedChunks > 0) {
+    console.warn(`Completed with ${failedChunks} failed chunks out of ${chunks.length} total chunks`);
+  } else {
+    console.log(`All ${chunks.length} chunks processed successfully`);
+  }
+  
   // Deduplicate terms
   console.log(`Total terms before deduplication: ${allTerms.length}`);
+  // Filter out any terms that might be invalid
+  allTerms = allTerms.filter(term => 
+    term && 
+    typeof term === 'object' && 
+    typeof term.sourceTerm === 'string' && 
+    typeof term.targetTerm === 'string' &&
+    term.sourceTerm.trim() !== '' && 
+    term.targetTerm.trim() !== ''
+  );
+  console.log(`Total valid terms before deduplication: ${allTerms.length}`);
+  
   const uniqueTerms = deduplicateTerms(allTerms);
   console.log(`Total terms after deduplication: ${uniqueTerms.length}`);
   
