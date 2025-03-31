@@ -68,8 +68,8 @@ export const callGeminiApi = async (
     console.log("Received structured response from Gemini API");
     
     // Access the response data - fix the method to access the structured content
-    // In @google/genai library, we need to access the text() method directly
-    const responseText = response.text();
+    // In @google/genai library, text is a property, not a method
+    const responseText = response.text;
     console.log("Structured response text:", responseText);
     
     // Parse the JSON response
