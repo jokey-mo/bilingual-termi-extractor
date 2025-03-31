@@ -2,7 +2,7 @@
 /**
  * Utilities for interacting with the Gemini API
  */
-import { GoogleGenerativeAI, Type } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface TerminologyPair {
   sourceTerm: string;
@@ -30,55 +30,54 @@ export const callGeminiApi = async (
     // Get the model
     const model = genAI.getGenerativeModel({ model: modelName });
     
-    console.log("Sending request to Gemini API with structured output schema...");
+    console.log("Sending request to Gemini API with structured output...");
     
-    // Configure the structured response schema for terminology pairs
-    const response = await model.generateContent({
+    // Configure the generation parameters with structured output schema
+    const generationConfig = {
+      temperature: 0.2,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 8192,
+    };
+    
+    // Create content with proper role structure and request structured JSON output in the prompt
+    const structuredPrompt = `${prompt}\n\nReturn your answer in the following JSON format only:\n{
+      "terminologyPairs": [
+        {
+          "sourceTerm": "term in source language",
+          "targetTerm": "equivalent term in target language"
+        },
+        ...
+      ]
+    }\n\nEnsure your response is valid JSON with no additional text.`;
+    
+    const result = await model.generateContent({
       contents: [{ 
         role: 'user',
-        parts: [{ text: prompt }] 
+        parts: [{ text: structuredPrompt }] 
       }],
-      generationConfig: {
-        temperature: 0.2,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
-      },
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          terminologyPairs: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                sourceTerm: {
-                  type: Type.STRING,
-                  description: 'Term in the source language',
-                },
-                targetTerm: {
-                  type: Type.STRING,
-                  description: 'Equivalent term in the target language',
-                }
-              },
-              required: ['sourceTerm', 'targetTerm']
-            }
-          }
-        },
-        required: ['terminologyPairs']
-      }
+      generationConfig
     });
     
-    console.log("Received structured response from Gemini API");
+    console.log("Received response from Gemini API");
     
-    // Parse the JSON response directly
-    const responseText = response.text();
+    // Get the response text
+    const responseText = result.response.text();
     console.log("Raw response:", responseText);
+    
+    // Extract JSON from the response - handle both clean JSON and markdown-wrapped JSON
+    let jsonText = responseText;
+    
+    // Try to extract JSON from markdown code blocks if present
+    const jsonMatch = responseText.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || responseText.match(/{[\s\S]*}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1] || jsonMatch[0];
+      console.log("Extracted JSON from markdown");
+    }
     
     try {
       // Parse the JSON response
-      const parsedResult = JSON.parse(responseText);
+      const parsedResult = JSON.parse(jsonText);
       console.log("JSON parsed successfully", parsedResult);
       
       // Validate the response structure
@@ -91,7 +90,7 @@ export const callGeminiApi = async (
       
     } catch (jsonError) {
       console.error("JSON parse error:", jsonError);
-      console.log("Problematic JSON text:", responseText);
+      console.log("Problematic JSON text:", jsonText);
       throw new Error("Failed to parse Gemini API response as JSON");
     }
     
