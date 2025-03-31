@@ -1,8 +1,9 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { parseTmxFile } from '@/utils/tmxParser';
 import { generatePrompt } from '@/utils/promptGenerator';
 import { callGeminiApi } from '@/utils/geminiApi';
+import { processTmxInChunks } from '@/utils/chunkProcessor';
 
 // Interface definitions for our terminology data
 interface TerminologyPair {
@@ -18,6 +19,7 @@ interface TerminologyExtractorProps {
   onProgress: (progress: number) => void;
   onComplete: (terms: TerminologyPair[]) => void;
   onError: (error: string) => void;
+  maxTokensPerChunk?: number;
 }
 
 const TerminologyExtractor = ({ 
@@ -27,8 +29,10 @@ const TerminologyExtractor = ({
   tmxFile,
   onProgress,
   onComplete,
-  onError
+  onError,
+  maxTokensPerChunk = 100000
 }: TerminologyExtractorProps) => {
+  const [allTerms, setAllTerms] = useState<TerminologyPair[]>([]);
   
   useEffect(() => {
     extractTerminology();
@@ -46,20 +50,28 @@ const TerminologyExtractor = ({
         unitCount: tmxData.translationUnits.length
       });
       
-      // Step 2: Prepare prompt for Gemini
-      onProgress(30);
-      console.log("Generating prompt...");
-      const prompt = generatePrompt(tmxData, datasetInfo);
+      // Step 2: Process TMX in chunks and extract terminology
+      onProgress(20);
+      console.log("Starting chunk processing with model:", modelName);
       
-      // Step 3: Call Gemini API with Google's official SDK
-      onProgress(50);
-      console.log("Calling Gemini API with model:", modelName);
-      const extractedTerms = await callGeminiApi(apiKey, modelName, prompt);
-      console.log("Gemini API call complete, extracted terms:", extractedTerms.length);
+      const result = await processTmxInChunks({
+        tmxData,
+        datasetInfo,
+        apiKey, 
+        modelName,
+        maxTokensPerChunk,
+        onChunkProgress: (chunkProgress) => {
+          // Map chunk progress (0-100) to overall progress (20-90)
+          const overallProgress = 20 + Math.floor(chunkProgress * 0.7);
+          onProgress(overallProgress);
+        }
+      });
+      
+      console.log("Chunk processing complete, extracted unique terms:", result.length);
       
       // Step 4: Process and return results
       onProgress(90);
-      onComplete(extractedTerms);
+      onComplete(result);
       onProgress(100);
       
     } catch (error: any) {
