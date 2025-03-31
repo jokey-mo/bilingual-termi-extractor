@@ -26,16 +26,6 @@ ${JSON.stringify(translationSamples, null, 2)}
 
 Please analyze these translation units and extract bilingual terminology pairs. 
 Focus on specialized terms, technical concepts, and domain-specific vocabulary.
-Return your answer in the following JSON format only:
-{
-  "terminologyPairs": [
-    {
-      "sourceTerm": "term in source language",
-      "targetTerm": "equivalent term in target language"
-    },
-    ...
-  ]
-}
 `;
   console.log("Generated prompt length:", prompt.length, "for", translationSamples.length, "units");
   return prompt;
