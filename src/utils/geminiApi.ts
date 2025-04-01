@@ -35,17 +35,31 @@ export const callGeminiApi = async (
     const modelName = modelNameInput.replace(/^models\//, '');
     console.log("Using normalized model name:", modelName);
     
+    // Ensure the baseURL has the trailing slash
+    const baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+    
     // Initialize the OpenAI client for Gemini's compatibility layer
-    // Add dangerouslyAllowBrowser: true to allow browser-side API calls
     const openai = new OpenAI({
       apiKey,
-      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+      baseURL,
       dangerouslyAllowBrowser: true
     });
     
-    console.log("Sending request to Gemini API with structured output schema...");
+    console.log("Sending request to Gemini API...");
     
-    // Call the API with structured output schema using OpenAI's SDK
+    // Call the API using the simpler models.list approach first to verify connection
+    try {
+      // Simple test request to make sure the API is accessible
+      const modelList = await openai.models.list();
+      console.log("API connection verified - models available");
+    } catch (connectionError) {
+      console.error("Could not connect to API:", connectionError);
+      throw new Error(`API connection failed: ${connectionError instanceof Error ? connectionError.message : 'Unknown error'}`);
+    }
+    
+    // Now that we know the connection works, proceed with the actual request
+    console.log("Making chat completion request...");
+    
     const completion = await openai.chat.completions.create({
       model: modelName,
       messages: [
@@ -55,7 +69,7 @@ export const callGeminiApi = async (
       response_format: { type: "json_object" },
       temperature: 0.2,
       top_p: 0.95,
-      max_tokens: 8192,
+      max_tokens: 4096,
     });
     
     console.log("Received response from Gemini API");
@@ -87,6 +101,34 @@ export const callGeminiApi = async (
           
           console.log("Successfully extracted", validTerms.length, "valid terminology pairs");
           return validTerms;
+        } else {
+          console.warn("Response doesn't contain terminologyPairs array:", parsedData);
+          
+          // Try to extract terms from any structure if possible
+          if (parsedData && typeof parsedData === 'object') {
+            const extractedTerms: TerminologyPair[] = [];
+            
+            // Try to find arrays that might contain terminology pairs
+            Object.values(parsedData).forEach(value => {
+              if (Array.isArray(value)) {
+                value.forEach(item => {
+                  if (item && typeof item === 'object' && 'sourceTerm' in item && 'targetTerm' in item) {
+                    if (typeof item.sourceTerm === 'string' && typeof item.targetTerm === 'string') {
+                      extractedTerms.push({
+                        sourceTerm: item.sourceTerm,
+                        targetTerm: item.targetTerm
+                      });
+                    }
+                  }
+                });
+              }
+            });
+            
+            if (extractedTerms.length > 0) {
+              console.log("Found", extractedTerms.length, "terminology pairs in alternative format");
+              return extractedTerms;
+            }
+          }
         }
       } catch (parseError) {
         console.error("Error parsing JSON response:", parseError);
