@@ -110,7 +110,7 @@ const TerminologyExtractor = ({
         console.error("Error in terminology extraction processing:", processingError);
         toast({
           title: "Processing error",
-          description: "An error occurred while processing the terminology.",
+          description: processingError.message || "An error occurred while processing the terminology.",
           variant: "destructive",
         });
         throw new Error(`Processing error: ${processingError.message}`);
