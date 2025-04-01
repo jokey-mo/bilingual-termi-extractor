@@ -74,7 +74,40 @@ const TerminologyExtractor = ({
         throw new Error("No translation units found in TMX file");
       }
       
-      // Step 2: Process TMX in chunks and extract terminology
+      // Step 2: Do a quick test API call to verify connectivity
+      onProgress(15);
+      console.log("Testing API connectivity with model:", modelName);
+      
+      try {
+        // Create a minimal prompt for testing
+        const testPrompt = `
+Extract terminology pairs from this simple example:
+SOURCE: "The computer processes data quickly."
+TARGET: "L'ordinateur traite les données rapidement."
+`;
+        const testResult = await callGeminiApi(apiKey, modelName, testPrompt);
+        console.log("API test result:", testResult);
+        
+        if (testResult.length === 0) {
+          console.warn("API test returned no results, but didn't throw an error. Proceeding with caution.");
+          toast({
+            title: "API Warning",
+            description: "Initial API test didn't return any results. The extraction may not work correctly.",
+          });
+        } else {
+          console.log("API test successful");
+        }
+      } catch (testError: any) {
+        console.error("API test error:", testError);
+        toast({
+          title: "API Connection Error",
+          description: testError.message || "Could not connect to the Gemini API. Please check your API key and selected model.",
+          variant: "destructive",
+        });
+        throw new Error(`API connectivity test failed: ${testError.message}`);
+      }
+      
+      // Step 3: Process TMX in chunks and extract terminology
       onProgress(20);
       console.log("Starting chunk processing with model:", modelName);
       

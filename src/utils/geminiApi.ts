@@ -3,7 +3,6 @@
  * Utilities for interacting with the Gemini API through OpenAI compatibility layer
  */
 import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 
 interface TerminologyPair {
@@ -37,9 +36,11 @@ export const callGeminiApi = async (
     console.log("Using normalized model name:", modelName);
     
     // Initialize the OpenAI client for Gemini's compatibility layer
+    // Add dangerouslyAllowBrowser: true to allow browser-side API calls
     const openai = new OpenAI({
       apiKey,
-      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai"
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+      dangerouslyAllowBrowser: true
     });
     
     console.log("Sending request to Gemini API with structured output schema...");
