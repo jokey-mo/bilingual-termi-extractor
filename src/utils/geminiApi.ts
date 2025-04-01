@@ -35,49 +35,43 @@ export const callGeminiApi = async (
     const modelName = modelNameInput.replace(/^models\//, '');
     console.log("Using normalized model name:", modelName);
     
-    // Ensure the baseURL has the trailing slash
-    const baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+    // This is the official endpoint for the Gemini OpenAI compatibility API
+    // Make sure to include the API key as a URL parameter to avoid CORS preflight issues
+    const baseURL = `https://generativelanguage.googleapis.com/v1beta/openai?key=${apiKey}`;
     
-    // Initialize the OpenAI client for Gemini's compatibility layer
-    const openai = new OpenAI({
-      apiKey,
-      baseURL,
-      dangerouslyAllowBrowser: true
+    // Create a direct fetch request instead of using the OpenAI SDK
+    // This will bypass CORS issues by using the API key in the URL and avoiding complex headers
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          { role: "system", content: "You are a terminology extraction expert. Extract bilingual terminology pairs from the translation memory data provided." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        top_p: 0.95,
+        max_tokens: 4096,
+      }),
     });
     
-    console.log("Sending request to Gemini API...");
-    
-    // Call the API using the simpler models.list approach first to verify connection
-    try {
-      // Simple test request to make sure the API is accessible
-      const modelList = await openai.models.list();
-      console.log("API connection verified - models available");
-    } catch (connectionError) {
-      console.error("Could not connect to API:", connectionError);
-      throw new Error(`API connection failed: ${connectionError instanceof Error ? connectionError.message : 'Unknown error'}`);
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("API error response:", errorData);
+      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
     }
     
-    // Now that we know the connection works, proceed with the actual request
-    console.log("Making chat completion request...");
-    
-    const completion = await openai.chat.completions.create({
-      model: modelName,
-      messages: [
-        { role: "system", content: "You are a terminology extraction expert. Extract bilingual terminology pairs from the translation memory data provided." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      top_p: 0.95,
-      max_tokens: 4096,
-    });
-    
+    const data = await response.json();
     console.log("Received response from Gemini API");
     
-    // Parse the JSON content from the response
-    if (completion.choices && completion.choices[0]?.message?.content) {
+    // Parse the response content
+    if (data.choices && data.choices[0]?.message?.content) {
       try {
-        const content = completion.choices[0].message.content;
+        const content = data.choices[0].message.content;
         console.log("Raw response content:", content);
         
         const parsedData = JSON.parse(content);

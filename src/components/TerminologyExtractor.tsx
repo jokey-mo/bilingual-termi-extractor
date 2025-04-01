@@ -89,13 +89,17 @@ TARGET: "L'ordinateur traite les données rapidement."
         console.log("API test result:", testResult);
         
         if (testResult.length === 0) {
-          console.warn("API test returned no results, but didn't throw an error. Proceeding with caution.");
+          console.warn("API test returned no results, proceeding with caution.");
           toast({
             title: "API Warning",
             description: "Initial API test didn't return any results. The extraction may not work correctly.",
           });
         } else {
           console.log("API test successful");
+          toast({
+            title: "API Connection Success",
+            description: "Successfully connected to the Gemini API.",
+          });
         }
       } catch (testError: any) {
         console.error("API test error:", testError);
