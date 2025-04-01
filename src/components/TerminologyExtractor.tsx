@@ -5,6 +5,7 @@ import { generatePrompt } from '@/utils/promptGenerator';
 import { callGeminiApi } from '@/utils/geminiApi';
 import { processTmxInChunks } from '@/utils/chunkProcessor';
 import { toast } from "@/components/ui/use-toast";
+import { GoogleGenAI } from "@google/genai";
 
 // Interface definitions for our terminology data
 interface TerminologyPair {
@@ -79,6 +80,10 @@ const TerminologyExtractor = ({
       console.log("Testing API connectivity with model:", modelName);
       
       try {
+        // Test the API connection by trying to list models
+        const genAI = new GoogleGenAI({ apiKey });
+        const testModel = genAI.getGenerativeModel({ model: modelName.replace(/^models\//, '') });
+        
         // Create a minimal prompt for testing
         const testPrompt = `
 Extract terminology pairs from this simple example:

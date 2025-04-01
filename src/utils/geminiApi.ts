@@ -1,8 +1,8 @@
 
 /**
- * Utilities for interacting with the Gemini API through OpenAI compatibility layer
+ * Utilities for interacting with the Gemini API through Google GenAI SDK
  */
-import OpenAI from "openai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 
 interface TerminologyPair {
@@ -29,104 +29,130 @@ export const callGeminiApi = async (
   prompt: string
 ): Promise<TerminologyPair[]> => {
   try {
-    console.log("Initializing OpenAI SDK with model:", modelNameInput);
+    console.log("Initializing GoogleGenAI SDK with model:", modelNameInput);
     
     // Normalize model name by removing any "models/" prefix if present
     const modelName = modelNameInput.replace(/^models\//, '');
     console.log("Using normalized model name:", modelName);
     
-    // This is the official endpoint for the Gemini OpenAI compatibility API
-    // Make sure to include the API key as a URL parameter to avoid CORS preflight issues
-    const baseURL = `https://generativelanguage.googleapis.com/v1beta/openai?key=${apiKey}`;
+    // Initialize the GenAI client
+    const genAI = new GoogleGenAI({ apiKey });
     
-    // Create a direct fetch request instead of using the OpenAI SDK
-    // This will bypass CORS issues by using the API key in the URL and avoiding complex headers
-    const response = await fetch(`${baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Get the model
+    const model = genAI.getGenerativeModel({ model: modelName });
+    
+    // Define the response schema for structured output
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        terminologyPairs: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              sourceTerm: {
+                type: Type.STRING,
+                description: 'Term in the source language',
+              },
+              targetTerm: {
+                type: Type.STRING,
+                description: 'Term in the target language',
+              },
+            },
+            required: ['sourceTerm', 'targetTerm'],
+            propertyOrdering: ['sourceTerm', 'targetTerm'],
+          },
+        },
       },
-      body: JSON.stringify({
-        model: modelName,
-        messages: [
-          { role: "system", content: "You are a terminology extraction expert. Extract bilingual terminology pairs from the translation memory data provided." },
-          { role: "user", content: prompt }
-        ],
-        response_format: { type: "json_object" },
+      required: ['terminologyPairs'],
+    };
+    
+    console.log("Sending request to Gemini API...");
+    
+    // Create system prompt and user prompt
+    const result = await model.generateContent({
+      contents: [
+        { role: "user", parts: [{ 
+          text: `You are a terminology extraction expert. Extract bilingual terminology pairs from the translation memory data provided.
+                
+                ${prompt}`
+        }] }
+      ],
+      generationConfig: {
         temperature: 0.2,
-        top_p: 0.95,
-        max_tokens: 4096,
-      }),
+        topP: 0.95,
+        maxOutputTokens: 4096,
+        responseMimeType: 'application/json',
+        responseSchema,
+      },
     });
     
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("API error response:", errorData);
-      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
-    }
-    
-    const data = await response.json();
     console.log("Received response from Gemini API");
     
-    // Parse the response content
-    if (data.choices && data.choices[0]?.message?.content) {
-      try {
-        const content = data.choices[0].message.content;
-        console.log("Raw response content:", content);
-        
-        const parsedData = JSON.parse(content);
-        console.log("Parsed JSON data:", parsedData);
-        
-        if (parsedData.terminologyPairs && Array.isArray(parsedData.terminologyPairs)) {
-          // Make sure all items conform to TerminologyPair interface
-          const validTerms: TerminologyPair[] = parsedData.terminologyPairs
-            .filter(item => 
-              item && 
-              typeof item === 'object' && 
-              typeof item.sourceTerm === 'string' &&
-              typeof item.targetTerm === 'string' &&
-              item.sourceTerm.trim() !== '' &&
-              item.targetTerm.trim() !== ''
-            )
-            .map(item => ({
-              sourceTerm: item.sourceTerm,
-              targetTerm: item.targetTerm
-            }));
+    // Parse the JSON response
+    try {
+      const response = result.response;
+      const textContent = response.text();
+      console.log("Raw response content:", textContent);
+      
+      if (textContent) {
+        try {
+          const parsedData = JSON.parse(textContent);
+          console.log("Parsed JSON data:", parsedData);
           
-          console.log("Successfully extracted", validTerms.length, "valid terminology pairs");
-          return validTerms;
-        } else {
-          console.warn("Response doesn't contain terminologyPairs array:", parsedData);
-          
-          // Try to extract terms from any structure if possible
-          if (parsedData && typeof parsedData === 'object') {
-            const extractedTerms: TerminologyPair[] = [];
+          if (parsedData.terminologyPairs && Array.isArray(parsedData.terminologyPairs)) {
+            // Make sure all items conform to TerminologyPair interface
+            const validTerms: TerminologyPair[] = parsedData.terminologyPairs
+              .filter(item => 
+                item && 
+                typeof item === 'object' && 
+                typeof item.sourceTerm === 'string' &&
+                typeof item.targetTerm === 'string' &&
+                item.sourceTerm.trim() !== '' &&
+                item.targetTerm.trim() !== ''
+              )
+              .map(item => ({
+                sourceTerm: item.sourceTerm,
+                targetTerm: item.targetTerm
+              }));
             
-            // Try to find arrays that might contain terminology pairs
-            Object.values(parsedData).forEach(value => {
-              if (Array.isArray(value)) {
-                value.forEach(item => {
-                  if (item && typeof item === 'object' && 'sourceTerm' in item && 'targetTerm' in item) {
-                    if (typeof item.sourceTerm === 'string' && typeof item.targetTerm === 'string') {
-                      extractedTerms.push({
-                        sourceTerm: item.sourceTerm,
-                        targetTerm: item.targetTerm
-                      });
+            console.log("Successfully extracted", validTerms.length, "valid terminology pairs");
+            return validTerms;
+          } else {
+            console.warn("Response doesn't contain terminologyPairs array:", parsedData);
+            
+            // Try to extract terms from any structure if possible
+            if (parsedData && typeof parsedData === 'object') {
+              const extractedTerms: TerminologyPair[] = [];
+              
+              // Try to find arrays that might contain terminology pairs
+              Object.values(parsedData).forEach(value => {
+                if (Array.isArray(value)) {
+                  value.forEach(item => {
+                    if (item && typeof item === 'object' && 'sourceTerm' in item && 'targetTerm' in item) {
+                      if (typeof item.sourceTerm === 'string' && typeof item.targetTerm === 'string') {
+                        extractedTerms.push({
+                          sourceTerm: item.sourceTerm,
+                          targetTerm: item.targetTerm
+                        });
+                      }
                     }
-                  }
-                });
+                  });
+                }
+              });
+              
+              if (extractedTerms.length > 0) {
+                console.log("Found", extractedTerms.length, "terminology pairs in alternative format");
+                return extractedTerms;
               }
-            });
-            
-            if (extractedTerms.length > 0) {
-              console.log("Found", extractedTerms.length, "terminology pairs in alternative format");
-              return extractedTerms;
             }
           }
+        } catch (parseError) {
+          console.error("Error parsing JSON response:", parseError);
         }
-      } catch (parseError) {
-        console.error("Error parsing JSON response:", parseError);
       }
+    } catch (responseError) {
+      console.error("Error getting response text:", responseError);
     }
     
     // If we reached here, either the response format was unexpected or parsing failed
