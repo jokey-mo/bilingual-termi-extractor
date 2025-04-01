@@ -45,25 +45,56 @@ export const callGeminiApi = async (
     console.log("Sending request to Gemini API with structured output schema...");
     
     // Call the API with structured output schema using OpenAI's SDK
-    const completion = await openai.beta.chat.completions.parse({
+    const completion = await openai.chat.completions.create({
       model: modelName,
       messages: [
         { role: "system", content: "You are a terminology extraction expert. Extract bilingual terminology pairs from the translation memory data provided." },
         { role: "user", content: prompt }
       ],
-      response_format: zodResponseFormat(TerminologyResponseSchema),
+      response_format: { type: "json_object" },
       temperature: 0.2,
       top_p: 0.95,
       max_tokens: 8192,
     });
     
-    console.log("Received structured response from Gemini API");
+    console.log("Received response from Gemini API");
     
-    // Access the parsed response data
-    const parsedResponse = completion.choices[0].message.parsed;
-    console.log("Successfully parsed structured response with", parsedResponse.terminologyPairs.length, "terms");
+    // Parse the JSON content from the response
+    if (completion.choices && completion.choices[0]?.message?.content) {
+      try {
+        const content = completion.choices[0].message.content;
+        console.log("Raw response content:", content);
+        
+        const parsedData = JSON.parse(content);
+        console.log("Parsed JSON data:", parsedData);
+        
+        if (parsedData.terminologyPairs && Array.isArray(parsedData.terminologyPairs)) {
+          // Make sure all items conform to TerminologyPair interface
+          const validTerms: TerminologyPair[] = parsedData.terminologyPairs
+            .filter(item => 
+              item && 
+              typeof item === 'object' && 
+              typeof item.sourceTerm === 'string' &&
+              typeof item.targetTerm === 'string' &&
+              item.sourceTerm.trim() !== '' &&
+              item.targetTerm.trim() !== ''
+            )
+            .map(item => ({
+              sourceTerm: item.sourceTerm,
+              targetTerm: item.targetTerm
+            }));
+          
+          console.log("Successfully extracted", validTerms.length, "valid terminology pairs");
+          return validTerms;
+        }
+      } catch (parseError) {
+        console.error("Error parsing JSON response:", parseError);
+      }
+    }
     
-    return parsedResponse.terminologyPairs;
+    // If we reached here, either the response format was unexpected or parsing failed
+    console.warn("Response format unexpected or parsing failed, returning empty array");
+    return [];
     
   } catch (error: any) {
     console.error('Gemini API call failed:', error);
@@ -73,17 +104,9 @@ export const callGeminiApi = async (
       console.error('API error response:', error.response);
     }
     
-    // Implement fallback logic for JSON parsing errors
-    if (error.message && error.message.includes("Failed to parse JSON")) {
-      console.warn("JSON parsing error detected, attempting recovery...");
-      try {
-        // If we have raw content in the error, try to extract terminology pairs
-        if (error.rawContent) {
-          return extractTermsFromRawContent(error.rawContent);
-        }
-      } catch (recoveryError) {
-        console.error("Recovery attempt failed:", recoveryError);
-      }
+    // Try to extract any useful information from the error
+    if (error.message) {
+      console.error('Error message:', error.message);
     }
     
     // Return empty array instead of throwing error to make the application more resilient
@@ -91,48 +114,3 @@ export const callGeminiApi = async (
     return [];
   }
 };
-
-/**
- * Attempt to extract terminology pairs from raw content when structured parsing fails
- */
-function extractTermsFromRawContent(rawContent: string): TerminologyPair[] {
-  try {
-    // Try to parse as JSON first
-    let content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
-    
-    // Find JSON objects in the text
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      content = jsonMatch[0];
-    }
-    
-    const parsed = JSON.parse(content);
-    
-    // Look for the terminology pairs in various possible formats
-    if (parsed.terminologyPairs && Array.isArray(parsed.terminologyPairs)) {
-      return parsed.terminologyPairs;
-    }
-    
-    // If we have an array directly
-    if (Array.isArray(parsed)) {
-      return parsed.map(item => ({
-        sourceTerm: item.sourceTerm || item.source || "",
-        targetTerm: item.targetTerm || item.target || ""
-      }));
-    }
-    
-    // If we have some other structure, try to extract pairs
-    for (const key in parsed) {
-      if (Array.isArray(parsed[key])) {
-        return parsed[key].map(item => ({
-          sourceTerm: item.sourceTerm || item.source || "",
-          targetTerm: item.targetTerm || item.target || ""
-        }));
-      }
-    }
-  } catch (e) {
-    console.error("Failed to extract terms from raw content:", e);
-  }
-  
-  return [];
-}
