@@ -2,7 +2,7 @@
 /**
  * Utilities for interacting with the Gemini API through Google GenAI SDK
  */
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from "@google/genai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { z } from "zod";
 
 interface TerminologyPair {
@@ -29,43 +29,17 @@ export const callGeminiApi = async (
   prompt: string
 ): Promise<TerminologyPair[]> => {
   try {
-    console.log("Initializing GoogleGenAI SDK with model:", modelNameInput);
+    console.log("Initializing GoogleGenerativeAI SDK with model:", modelNameInput);
     
     // Normalize model name by removing any "models/" prefix if present
     const modelName = modelNameInput.replace(/^models\//, '');
     console.log("Using normalized model name:", modelName);
     
     // Initialize the GenAI client
-    const genAI = new GoogleGenAI(apiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Get the model - fixed API method name
+    // Get the model - using the correct model method
     const model = genAI.getGenerativeModel({ model: modelName });
-    
-    // Define the response schema for structured output
-    const responseSchema = {
-      type: Type.OBJECT,
-      properties: {
-        terminologyPairs: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              sourceTerm: {
-                type: Type.STRING,
-                description: 'Term in the source language',
-              },
-              targetTerm: {
-                type: Type.STRING,
-                description: 'Term in the target language',
-              },
-            },
-            required: ['sourceTerm', 'targetTerm'],
-            propertyOrdering: ['sourceTerm', 'targetTerm'],
-          },
-        },
-      },
-      required: ['terminologyPairs'],
-    };
     
     console.log("Sending request to Gemini API...");
     
@@ -83,7 +57,30 @@ export const callGeminiApi = async (
         topP: 0.95,
         maxOutputTokens: 4096,
         responseMimeType: 'application/json',
-        responseSchema,
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            terminologyPairs: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  sourceTerm: {
+                    type: "STRING",
+                    description: 'Term in the source language',
+                  },
+                  targetTerm: {
+                    type: "STRING",
+                    description: 'Term in the target language',
+                  },
+                },
+                required: ['sourceTerm', 'targetTerm'],
+                propertyOrdering: ['sourceTerm', 'targetTerm'],
+              },
+            },
+          },
+          required: ['terminologyPairs'],
+        }
       },
     });
     
