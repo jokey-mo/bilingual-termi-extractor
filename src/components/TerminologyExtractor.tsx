@@ -80,8 +80,8 @@ const TerminologyExtractor = ({
       console.log("Testing API connectivity with model:", modelName);
       
       try {
-        // Test the API connection by trying to list models
-        const genAI = new GoogleGenAI({ apiKey });
+        // Test the API connection by creating a minimal test call
+        const genAI = new GoogleGenAI(apiKey);
         const testModel = genAI.getGenerativeModel({ model: modelName.replace(/^models\//, '') });
         
         // Create a minimal prompt for testing

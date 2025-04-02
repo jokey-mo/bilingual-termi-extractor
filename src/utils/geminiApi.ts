@@ -2,7 +2,7 @@
 /**
  * Utilities for interacting with the Gemini API through Google GenAI SDK
  */
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from "@google/genai";
 import { z } from "zod";
 
 interface TerminologyPair {
@@ -36,9 +36,9 @@ export const callGeminiApi = async (
     console.log("Using normalized model name:", modelName);
     
     // Initialize the GenAI client
-    const genAI = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenAI(apiKey);
     
-    // Get the model
+    // Get the model - fixed API method name
     const model = genAI.getGenerativeModel({ model: modelName });
     
     // Define the response schema for structured output
