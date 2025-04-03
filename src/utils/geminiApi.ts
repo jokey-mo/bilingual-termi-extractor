@@ -2,7 +2,7 @@
 /**
  * Utilities for interacting with the Gemini API through Google GenAI SDK
  */
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 interface TerminologyPair {
@@ -29,17 +29,17 @@ export const callGeminiApi = async (
   prompt: string
 ): Promise<TerminologyPair[]> => {
   try {
-    console.log("Initializing GoogleGenerativeAI SDK with model:", modelNameInput);
+    console.log("Initializing GoogleGenAI SDK with model:", modelNameInput);
     
     // Normalize model name by removing any "models/" prefix if present
     const modelName = modelNameInput.replace(/^models\//, '');
     console.log("Using normalized model name:", modelName);
     
     // Initialize the GenAI client
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenAI(apiKey);
     
-    // Get the model - using the correct model method
-    const model = genAI.getGenerativeModel({ model: modelName });
+    // Create the model
+    const model = genAI.getGenerativeModel(modelName);
     
     console.log("Sending request to Gemini API...");
     
@@ -57,25 +57,24 @@ export const callGeminiApi = async (
         topP: 0.95,
         maxOutputTokens: 4096,
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: "OBJECT",
+        structuredOutputSchema: {
+          type: "object",
           properties: {
             terminologyPairs: {
-              type: "ARRAY",
+              type: "array",
               items: {
-                type: "OBJECT",
+                type: "object",
                 properties: {
                   sourceTerm: {
-                    type: "STRING",
+                    type: "string",
                     description: 'Term in the source language',
                   },
                   targetTerm: {
-                    type: "STRING",
+                    type: "string",
                     description: 'Term in the target language',
                   },
                 },
                 required: ['sourceTerm', 'targetTerm'],
-                propertyOrdering: ['sourceTerm', 'targetTerm'],
               },
             },
           },
